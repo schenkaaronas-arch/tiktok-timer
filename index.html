@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Romantic Speed Date Timer</title>
-  <!-- PeerJS Cloud Library -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Poppins:wght@700&display=swap');
@@ -119,9 +118,6 @@
       50% { border-color: #ffffff; box-shadow: 0 0 50px rgba(255, 255, 255, 1); }
       100% { border-color: #ff4d6d; }
     }
-
-    /* Hide control buttons on stream screen if wanted, or keep visible */
-    .controller-only { display: none; }
   </style>
 </head>
 <body>
@@ -129,7 +125,7 @@
   <div class="timer-card" id="card">
     <div class="title">❤️ Speed Date ❤️</div>
     <div class="time-display" id="timer">04:00</div>
-    <div class="status-badge" id="statusBadge">Connecting Cloud Sync...</div>
+    <div class="status-badge" id="statusBadge">Connecting...</div>
     
     <div class="controls" id="controlPanel">
       <button class="btn-start" id="startBtn" onclick="sendAction('START')">Start</button>
@@ -148,57 +144,67 @@
     const card = document.getElementById('card');
     const statusBadge = document.getElementById('statusBadge');
 
-    // --- PEERJS CLOUD SYNC ---
-    // Universal stream room ID for your speed date timer
-    const STREAM_ROOM_ID = "captain-josh-speeddate-timer-2026";
+    const HOST_ID = "captain-josh-speeddate-display";
     let peer = null;
     let conn = null;
-    let isHost = false;
 
-    // Check if this window was opened as a controller
     const urlParams = new URLSearchParams(window.location.search);
-    const isControllerMode = urlParams.get('mode') === 'controller';
+    const isController = urlParams.get('mode') === 'controller';
 
-    function initCloudSync() {
-      if (isControllerMode) {
-        // CONTROLLER MODE (Opened in Chrome / Mobile)
-        statusBadge.innerText = " Controller Mode";
-        peer = new Peer();
+    function initSync() {
+      if (isController) {
+        // CONTROLLER (Chrome / Mobile)
+        statusBadge.innerText = "Connecting to TikTok Stream...";
+        peer = new Peer(); // Random ID for controller
+
         peer.on('open', () => {
-          conn = peer.connect(STREAM_ROOM_ID);
-          conn.on('open', () => {
-            statusBadge.innerText = " Connected to Stream!";
-          });
-        });
-      } else {
-        // DISPLAY MODE (Loaded in TikTok Studio)
-        peer = new Peer(STREAM_ROOM_ID);
-        
-        peer.on('open', (id) => {
-          statusBadge.innerText = " Ready for Controller";
+          connectToDisplay();
         });
 
-        // Room ID busy means host is already active, act as second controller
         peer.on('error', (err) => {
-          if (err.type === 'unavailable-id') {
-            statusBadge.innerText = " Stream Host Active";
-          }
+          statusBadge.innerText = "Stream Display Not Found!";
+          setTimeout(connectToDisplay, 3000); // Retry connecting
+        });
+
+      } else {
+        // DISPLAY (TikTok Live Studio)
+        peer = new Peer(HOST_ID);
+
+        peer.on('open', () => {
+          statusBadge.innerText = "Ready for Controller";
         });
 
         peer.on('connection', (connection) => {
           conn = connection;
-          statusBadge.innerText = " Remote Controller Linked!";
+          statusBadge.innerText = "Controller Linked!";
           conn.on('data', (action) => {
             handleAction(action);
           });
         });
+
+        peer.on('error', (err) => {
+          if (err.type === 'unavailable-id') {
+            statusBadge.innerText = "Display Already Active";
+          }
+        });
       }
     }
 
+    function connectToDisplay() {
+      conn = peer.connect(HOST_ID);
+      conn.on('open', () => {
+        statusBadge.innerText = " Connected to TikTok Stream!";
+      });
+      conn.on('close', () => {
+        statusBadge.innerText = "Disconnected. Reconnecting...";
+        setTimeout(connectToDisplay, 3000);
+      });
+    }
+
     function sendAction(action) {
-      handleAction(action); // Update local window
-      if (conn && conn.open) {
-        conn.send(action); // Send signal over cloud to TikTok Studio
+      handleAction(action);
+      if (isController && conn && conn.open) {
+        conn.send(action);
       }
     }
 
@@ -208,7 +214,6 @@
       if (action === 'RESET') resetTimerLocal();
     }
 
-    // --- AUDIO CHIME ---
     function playRomanticChime() {
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -291,7 +296,7 @@
     }
 
     updateDisplay();
-    initCloudSync();
+    initSync();
   </script>
 
 </body>
