@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Romantic Speed Date Timer</title>
-  <!-- Firebase Realtime Database Scripts -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <!-- PubNub Real-Time Cloud Library -->
+  <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Poppins:wght@700&display=swap');
 
@@ -127,7 +126,7 @@
   <div class="timer-card" id="card">
     <div class="title">❤️ Speed Date ❤️</div>
     <div class="time-display" id="timer">04:00</div>
-    <div class="status-badge" id="statusBadge">Connecting Cloud Sync...</div>
+    <div class="status-badge" id="statusBadge">Connecting...</div>
     
     <div class="controls" id="controlPanel">
       <button class="btn-start" id="startBtn" onclick="triggerAction('START')">Start</button>
@@ -146,32 +145,34 @@
     const card = document.getElementById('card');
     const statusBadge = document.getElementById('statusBadge');
 
-    // --- FREE PUBLIC CLOUD DATABASE SETUP ---
-    const firebaseConfig = {
-      databaseURL: "https://speeddate-timer-default-rtdb.firebaseio.com/"
-    };
-    
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
-    const commandRef = database.ref("timer_command");
+    // --- PUBNUB FREE REAL-TIME SYNC ---
+    const CHANNEL = "captain_josh_speed_date_room";
+    const pubnub = new PubNub({
+      publishKey: "pub-c-b3a62f5f-1e64-4458-9a3c-ee872b757e72",
+      subscribeKey: "sub-c-1a87b3e9-a477-4b71-b0db-b86f3db53ffc",
+      userId: "user_" + Math.floor(Math.random() * 10000)
+    });
 
-    // Listen for real-time changes across ALL connected windows
-    commandRef.on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (!data) return;
+    pubnub.subscribe({ channels: [CHANNEL] });
 
-      statusBadge.innerText = "⚡ Real-Time Cloud Sync Active";
-
-      if (data.action === 'START') startTimerLocal();
-      if (data.action === 'STOP') stopTimerLocal();
-      if (data.action === 'RESET') resetTimerLocal();
+    pubnub.addListener({
+      status: (statusEvent) => {
+        if (statusEvent.category === "PNConnectedCategory") {
+          statusBadge.innerText = "⚡ Connected & Live!";
+        }
+      },
+      message: (event) => {
+        const action = event.message.action;
+        if (action === 'START') startTimerLocal();
+        if (action === 'STOP') stopTimerLocal();
+        if (action === 'RESET') resetTimerLocal();
+      }
     });
 
     function triggerAction(actionName) {
-      // Pushes the command to Google Cloud, instantly syncing everywhere
-      commandRef.set({
-        action: actionName,
-        timestamp: Date.now()
+      pubnub.publish({
+        channel: CHANNEL,
+        message: { action: actionName }
       });
     }
 
