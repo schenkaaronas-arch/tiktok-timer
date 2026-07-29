@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <title>Romantic Speed Date Timer</title>
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- Firebase Realtime Database Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Poppins:wght@700&display=swap');
 
@@ -99,19 +101,6 @@
       border: 1px solid rgba(255, 179, 193, 0.3);
     }
 
-    .mode-switch {
-      margin-top: 10px;
-      font-size: 10px;
-      color: #ffb3c1;
-      opacity: 0.8;
-    }
-
-    .mode-switch a {
-      color: #ff4d6d;
-      text-decoration: underline;
-      cursor: pointer;
-    }
-
     .pulse-warning {
       animation: heartPulse 1s infinite alternate;
       color: #ff0054 !important;
@@ -138,16 +127,12 @@
   <div class="timer-card" id="card">
     <div class="title">❤️ Speed Date ❤️</div>
     <div class="time-display" id="timer">04:00</div>
-    <div class="status-badge" id="statusBadge">Initializing...</div>
+    <div class="status-badge" id="statusBadge">Connecting Cloud Sync...</div>
     
     <div class="controls" id="controlPanel">
-      <button class="btn-start" id="startBtn" onclick="sendAction('START')">Start</button>
-      <button class="btn-stop" id="stopBtn" onclick="sendAction('STOP')">Stop</button>
-      <button class="btn-stop" onclick="sendAction('RESET')">Reset</button>
-    </div>
-
-    <div class="mode-switch" id="modeSwitch">
-      Mode: <span id="modeText">Display</span> | <a onclick="toggleMode()">Switch Mode</a>
+      <button class="btn-start" id="startBtn" onclick="triggerAction('START')">Start</button>
+      <button class="btn-stop" id="stopBtn" onclick="triggerAction('STOP')">Stop</button>
+      <button class="btn-stop" onclick="triggerAction('RESET')">Reset</button>
     </div>
   </div>
 
@@ -160,82 +145,37 @@
     const startBtn = document.getElementById('startBtn');
     const card = document.getElementById('card');
     const statusBadge = document.getElementById('statusBadge');
-    const modeText = document.getElementById('modeText');
 
-    const HOST_ID = "captain-josh-speeddate-display";
-    let peer = null;
-    let conn = null;
+    // --- FREE PUBLIC CLOUD DATABASE SETUP ---
+    const firebaseConfig = {
+      databaseURL: "https://speeddate-timer-default-rtdb.firebaseio.com/"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const commandRef = database.ref("timer_command");
 
-    // Default to controller mode unless specified
-    const urlParams = new URLSearchParams(window.location.search);
-    let isController = urlParams.get('mode') === 'controller';
+    // Listen for real-time changes across ALL connected windows
+    commandRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
 
-    function initSync() {
-      if (peer) peer.destroy();
+      statusBadge.innerText = "⚡ Real-Time Cloud Sync Active";
 
-      if (isController) {
-        modeText.innerText = "Remote Controller";
-        statusBadge.innerText = "Connecting to TikTok Stream...";
-        peer = new Peer();
+      if (data.action === 'START') startTimerLocal();
+      if (data.action === 'STOP') stopTimerLocal();
+      if (data.action === 'RESET') resetTimerLocal();
+    });
 
-        peer.on('open', () => { connectToDisplay(); });
-        peer.on('error', (err) => {
-          statusBadge.innerText = "Stream Display Not Ready";
-          setTimeout(connectToDisplay, 3000);
-        });
-
-      } else {
-        modeText.innerText = "Stream Overlay (Display)";
-        peer = new Peer(HOST_ID);
-
-        peer.on('open', () => {
-          statusBadge.innerText = "Ready for Controller";
-        });
-
-        peer.on('connection', (connection) => {
-          conn = connection;
-          statusBadge.innerText = "Controller Connected!";
-          conn.on('data', (action) => handleAction(action));
-        });
-
-        peer.on('error', (err) => {
-          if (err.type === 'unavailable-id') {
-            statusBadge.innerText = "Display Already Active";
-          }
-        });
-      }
-    }
-
-    function connectToDisplay() {
-      if (!isController) return;
-      conn = peer.connect(HOST_ID);
-      conn.on('open', () => {
-        statusBadge.innerText = "Connected to TikTok Stream!";
-      });
-      conn.on('close', () => {
-        statusBadge.innerText = "Disconnected. Retrying...";
-        setTimeout(connectToDisplay, 3000);
+    function triggerAction(actionName) {
+      // Pushes the command to Google Cloud, instantly syncing everywhere
+      commandRef.set({
+        action: actionName,
+        timestamp: Date.now()
       });
     }
 
-    function toggleMode() {
-      isController = !isController;
-      initSync();
-    }
-
-    function sendAction(action) {
-      handleAction(action);
-      if (isController && conn && conn.open) {
-        conn.send(action);
-      }
-    }
-
-    function handleAction(action) {
-      if (action === 'START') startTimerLocal();
-      if (action === 'STOP') stopTimerLocal();
-      if (action === 'RESET') resetTimerLocal();
-    }
-
+    // --- AUDIO CHIME ---
     function playRomanticChime() {
       try {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -318,10 +258,7 @@
     }
 
     updateDisplay();
-    initSync();
   </script>
 
-</body>
-</html>
 </body>
 </html>
