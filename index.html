@@ -99,6 +99,19 @@
       border: 1px solid rgba(255, 179, 193, 0.3);
     }
 
+    .mode-switch {
+      margin-top: 10px;
+      font-size: 10px;
+      color: #ffb3c1;
+      opacity: 0.8;
+    }
+
+    .mode-switch a {
+      color: #ff4d6d;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     .pulse-warning {
       animation: heartPulse 1s infinite alternate;
       color: #ff0054 !important;
@@ -125,12 +138,16 @@
   <div class="timer-card" id="card">
     <div class="title">❤️ Speed Date ❤️</div>
     <div class="time-display" id="timer">04:00</div>
-    <div class="status-badge" id="statusBadge">Connecting...</div>
+    <div class="status-badge" id="statusBadge">Initializing...</div>
     
     <div class="controls" id="controlPanel">
       <button class="btn-start" id="startBtn" onclick="sendAction('START')">Start</button>
       <button class="btn-stop" id="stopBtn" onclick="sendAction('STOP')">Stop</button>
       <button class="btn-stop" onclick="sendAction('RESET')">Reset</button>
+    </div>
+
+    <div class="mode-switch" id="modeSwitch">
+      Mode: <span id="modeText">Display</span> | <a onclick="toggleMode()">Switch Mode</a>
     </div>
   </div>
 
@@ -143,31 +160,32 @@
     const startBtn = document.getElementById('startBtn');
     const card = document.getElementById('card');
     const statusBadge = document.getElementById('statusBadge');
+    const modeText = document.getElementById('modeText');
 
     const HOST_ID = "captain-josh-speeddate-display";
     let peer = null;
     let conn = null;
 
+    // Default to controller mode unless specified
     const urlParams = new URLSearchParams(window.location.search);
-    const isController = urlParams.get('mode') === 'controller';
+    let isController = urlParams.get('mode') === 'controller';
 
     function initSync() {
+      if (peer) peer.destroy();
+
       if (isController) {
-        // CONTROLLER (Chrome / Mobile)
+        modeText.innerText = "Remote Controller";
         statusBadge.innerText = "Connecting to TikTok Stream...";
-        peer = new Peer(); // Random ID for controller
+        peer = new Peer();
 
-        peer.on('open', () => {
-          connectToDisplay();
-        });
-
+        peer.on('open', () => { connectToDisplay(); });
         peer.on('error', (err) => {
-          statusBadge.innerText = "Stream Display Not Found!";
-          setTimeout(connectToDisplay, 3000); // Retry connecting
+          statusBadge.innerText = "Stream Display Not Ready";
+          setTimeout(connectToDisplay, 3000);
         });
 
       } else {
-        // DISPLAY (TikTok Live Studio)
+        modeText.innerText = "Stream Overlay (Display)";
         peer = new Peer(HOST_ID);
 
         peer.on('open', () => {
@@ -176,10 +194,8 @@
 
         peer.on('connection', (connection) => {
           conn = connection;
-          statusBadge.innerText = "Controller Linked!";
-          conn.on('data', (action) => {
-            handleAction(action);
-          });
+          statusBadge.innerText = "Controller Connected!";
+          conn.on('data', (action) => handleAction(action));
         });
 
         peer.on('error', (err) => {
@@ -191,14 +207,20 @@
     }
 
     function connectToDisplay() {
+      if (!isController) return;
       conn = peer.connect(HOST_ID);
       conn.on('open', () => {
-        statusBadge.innerText = " Connected to TikTok Stream!";
+        statusBadge.innerText = "Connected to TikTok Stream!";
       });
       conn.on('close', () => {
-        statusBadge.innerText = "Disconnected. Reconnecting...";
+        statusBadge.innerText = "Disconnected. Retrying...";
         setTimeout(connectToDisplay, 3000);
       });
+    }
+
+    function toggleMode() {
+      isController = !isController;
+      initSync();
     }
 
     function sendAction(action) {
@@ -299,5 +321,7 @@
     initSync();
   </script>
 
+</body>
+</html>
 </body>
 </html>
