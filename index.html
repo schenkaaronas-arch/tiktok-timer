@@ -3,8 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Romantic Speed Date Timer</title>
-  <!-- PubNub Real-Time Cloud Library -->
-  <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.7.2.2.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Poppins:wght@700&display=swap');
 
@@ -126,12 +124,12 @@
   <div class="timer-card" id="card">
     <div class="title">❤️ Speed Date ❤️</div>
     <div class="time-display" id="timer">04:00</div>
-    <div class="status-badge" id="statusBadge">Connecting...</div>
+    <div class="status-badge" id="statusBadge">⚡ Instant Local Sync Active</div>
     
     <div class="controls" id="controlPanel">
-      <button class="btn-start" id="startBtn" onclick="triggerAction('START')">Start</button>
-      <button class="btn-stop" id="stopBtn" onclick="triggerAction('STOP')">Stop</button>
-      <button class="btn-stop" onclick="triggerAction('RESET')">Reset</button>
+      <button class="btn-start" id="startBtn" onclick="sendAction('START')">Start</button>
+      <button class="btn-stop" id="stopBtn" onclick="sendAction('STOP')">Stop</button>
+      <button class="btn-stop" onclick="sendAction('RESET')">Reset</button>
     </div>
   </div>
 
@@ -143,37 +141,29 @@
     const timerDisplay = document.getElementById('timer');
     const startBtn = document.getElementById('startBtn');
     const card = document.getElementById('card');
-    const statusBadge = document.getElementById('statusBadge');
 
-    // --- PUBNUB FREE REAL-TIME SYNC ---
-    const CHANNEL = "captain_josh_speed_date_room";
-    const pubnub = new PubNub({
-      publishKey: "pub-c-b3a62f5f-1e64-4458-9a3c-ee872b757e72",
-      subscribeKey: "sub-c-1a87b3e9-a477-4b71-b0db-b86f3db53ffc",
-      userId: "user_" + Math.floor(Math.random() * 10000)
-    });
-
-    pubnub.subscribe({ channels: [CHANNEL] });
-
-    pubnub.addListener({
-      status: (statusEvent) => {
-        if (statusEvent.category === "PNConnectedCategory") {
-          statusBadge.innerText = "⚡ Connected & Live!";
+    // --- INSTANT BROWSER LOCALSTORAGE SYNC ---
+    window.addEventListener('storage', (event) => {
+      if (event.key === 'timer_command') {
+        const data = JSON.parse(event.newValue);
+        if (data && data.action) {
+          handleAction(data.action);
         }
-      },
-      message: (event) => {
-        const action = event.message.action;
-        if (action === 'START') startTimerLocal();
-        if (action === 'STOP') stopTimerLocal();
-        if (action === 'RESET') resetTimerLocal();
       }
     });
 
-    function triggerAction(actionName) {
-      pubnub.publish({
-        channel: CHANNEL,
-        message: { action: actionName }
-      });
+    function sendAction(actionName) {
+      handleAction(actionName);
+      localStorage.setItem('timer_command', JSON.stringify({
+        action: actionName,
+        time: Date.now()
+      }));
+    }
+
+    function handleAction(action) {
+      if (action === 'START') startTimerLocal();
+      if (action === 'STOP') stopTimerLocal();
+      if (action === 'RESET') resetTimerLocal();
     }
 
     // --- AUDIO CHIME ---
